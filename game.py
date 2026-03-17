@@ -107,6 +107,80 @@ class MonopolyTrailGame:
             if len(self.players) == 1:
                 self.game_over = True
 
+    def play_minigame(self, player):
+        """Play a short minigame for bonus/penalty money."""
+        print("\n🎮 Minigame time! Win money to help your run.")
+        minigames = [self._minigame_guess_dice, self._minigame_rps, self._minigame_trivia]
+        game = random.choice(minigames)
+        game(player)
+
+    def _minigame_guess_dice(self, player):
+        print("Minigame: Guess the dice roll (1-6)")
+        try:
+            guess = int(input("Your guess: "))
+        except ValueError:
+            print("Invalid input. You lose your turn and $25.")
+            player.money -= 25
+            return
+        roll = random.randint(1, 6)
+        print(f"Dice rolled: {roll}")
+        if guess == roll:
+            reward = 100
+            player.money += reward
+            print(f"Nice! You win ${reward}.")
+        else:
+            penalty = 25
+            player.money -= penalty
+            print(f"Nope. You lose ${penalty}.")
+
+    def _minigame_rps(self, player):
+        print("Minigame: Rock Paper Scissors (best of 3)")
+        options = ["rock", "paper", "scissors"]
+        score = 0
+        for round_num in range(1, 4):
+            comp = random.choice(options)
+            choice = input(f"Round {round_num} - rock/paper/scissors? ").strip().lower()
+            if choice not in options:
+                print("Invalid choice, you forfeit the round.")
+                score -= 1
+            else:
+                if choice == comp:
+                    print(f"Tie (computer chose {comp}).")
+                elif (choice == "rock" and comp == "scissors") or (choice == "paper" and comp == "rock") or (choice == "scissors" and comp == "paper"):
+                    print(f"You win the round! (computer chose {comp})")
+                    score += 1
+                else:
+                    print(f"You lose the round. (computer chose {comp})")
+                    score -= 1
+        if score > 0:
+            reward = 150
+            player.money += reward
+            print(f"You won the match! +${reward}.")
+        elif score < 0:
+            penalty = 75
+            player.money -= penalty
+            print(f"You lost the match. -${penalty}.")
+        else:
+            print("Match tied. No money exchanged.")
+
+    def _minigame_trivia(self, player):
+        print("Minigame: Trivia Challenge")
+        questions = [
+            ("What is the capital of France?", "paris"),
+            ("How many continents are there?", "7"),
+            ("What planet is known as the Red Planet?", "mars"),
+        ]
+        question, answer = random.choice(questions)
+        guess = input(f"{question} ").strip().lower()
+        if guess == answer:
+            reward = 120
+            player.money += reward
+            print(f"Correct! You earn ${reward}.")
+        else:
+            penalty = 60
+            player.money -= penalty
+            print(f"Wrong. The answer was {answer}. You lose ${penalty}.")
+
     def play_turn(self, player):
         input(f"{player.name}'s turn. Press enter to roll dice.")
         dice = self.roll_dice()
@@ -115,6 +189,13 @@ class MonopolyTrailGame:
         self.handle_property(player, property)
         if random.random() < 0.3:  # 30% chance for random event
             self.random_event(player)
+        if random.random() < 0.2:  # 20% chance to trigger a minigame
+            self.play_minigame(player)
+            if player.money < 0:
+                print(f"{player.name} went bankrupt during the minigame!")
+                self.players.remove(player)
+                if len(self.players) == 1:
+                    self.game_over = True
 
     def play_game(self):
         print("Welcome to Monopoly Trail!")
