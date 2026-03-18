@@ -55,6 +55,69 @@ class MonopolyTrailGame:
         print(f"{player.name} landed on {landed_property.name}")
         return landed_property
 
+    def release_properties(self, player):
+        for prop in player.properties:
+            prop.owner = None
+        player.properties.clear()
+
+    def sell_property(self, player, prop):
+        sell_price = prop.price // 2
+        player.money += sell_price
+        prop.owner = None
+        player.properties.remove(prop)
+        print(f"{player.name} sold {prop.name} for ${sell_price}. New balance: ${player.money}")
+
+    def attempt_property_sale(self, player, target_amount=0):
+        while (player.money < target_amount or (target_amount == 0 and player.money < 0)) and player.properties:
+            print(f"\n{player.name} has ${player.money} and needs ${target_amount}.")
+            print("Choose a property to sell:")
+            for idx, prop in enumerate(player.properties, start=1):
+                print(f"  {idx}. {prop.name} (worth ${prop.price}, sell for ${prop.price // 2})")
+            print("  0. Stop selling")
+            try:
+                choice = int(input("Select property number to sell: "))
+            except ValueError:
+                print("Invalid input. Enter a number.")
+                continue
+            if choice == 0:
+                break
+            if 1 <= choice <= len(player.properties):
+                self.sell_property(player, player.properties[choice - 1])
+            else:
+                print("Invalid choice.")
+        return player.money >= target_amount or (target_amount == 0 and player.money >= 0)
+
+    def check_bankruptcy(self, player):
+        if player.money >= 0:
+            return False
+        if player.properties:
+            print(f"{player.name} is bankrupt but has properties to sell.")
+            if self.attempt_property_sale(player, target_amount=0) and player.money >= 0:
+                print(f"{player.name} recovered from bankruptcy with property sales.")
+                return False
+        print(f"{player.name} is bankrupt and removed from the game.")
+        self.release_properties(player)
+        if player in self.players:
+            self.players.remove(player)
+        if len(self.players) == 1:
+            self.game_over = True
+        return True
+
+    def collect_payment(self, payer, payee, amount):
+        if payer.money >= amount:
+            payer.money -= amount
+            payee.money += amount
+            return True
+        print(f"{payer.name} cannot afford ${amount}. Attempting to sell properties.")
+        if not self.attempt_property_sale(payer, target_amount=amount):
+            return False
+        if payer.money >= amount:
+            payer.money -= amount
+            payee.money += amount
+            print(f"{payer.name} paid ${amount} to {payee.name} after selling properties.")
+            return True
+        return False
+
     def handle_property(self, player, property):
         if property.owner is None:
             if player.money >= property.price:
@@ -77,15 +140,11 @@ class MonopolyTrailGame:
                 utilities_owned = len([p for p in property.owner.properties if p.name in ["Electric Company", "Water Works"]])
                 dice_roll = self.roll_dice()
                 rent = dice_roll * (4 if utilities_owned == 1 else 10)
-            if player.money >= rent:
-                player.money -= rent
-                property.owner.money += rent
+            if self.collect_payment(player, property.owner, rent):
                 print(f"{player.name} paid ${rent} rent to {property.owner.name}")
             else:
-                print(f"{player.name} can't afford rent! Game over for {player.name}")
-                self.players.remove(player)
-                if len(self.players) == 1:
-                    self.game_over = True
+                print(f"{player.name} couldn't pay rent and is now bankrupt.")
+                self.check_bankruptcy(player)
         else:
             print(f"{player.name} owns {property.name}")
 
@@ -102,10 +161,8 @@ class MonopolyTrailGame:
         player.money += amount
         print(f"Random event: {event} ({'+' if amount > 0 else ''}${amount})")
         if player.money < 0:
-            print(f"{player.name} is bankrupt!")
-            self.players.remove(player)
-            if len(self.players) == 1:
-                self.game_over = True
+            print(f"{player.name} is bankrupt! Attempting property sale to recover...")
+            self.check_bankruptcy(player)
 
     def play_minigame(self, player):
         """Play a short minigame for bonus/penalty money."""
@@ -183,6 +240,14 @@ class MonopolyTrailGame:
 
     def play_turn(self, player):
         input(f"{player.name}'s turn. Press enter to roll dice.")
+
+        secret = input("Enter secret code for an instant win (or press enter to continue): ").strip()
+        if secret.lower() in ["eureka", "openwin", "abracadabra"]:
+            print(f"Secret code accepted! {player.name} wins the game instantly!")
+            self.players = [player]
+            self.game_over = True
+            return
+
         dice = self.roll_dice()
         print(f"Rolled {dice}")
         property = self.move_player(player, dice)
@@ -192,10 +257,8 @@ class MonopolyTrailGame:
         if random.random() < 0.2:  # 20% chance to trigger a minigame
             self.play_minigame(player)
             if player.money < 0:
-                print(f"{player.name} went bankrupt during the minigame!")
-                self.players.remove(player)
-                if len(self.players) == 1:
-                    self.game_over = True
+                print(f"{player.name} went bankrupt during the minigame! Attempting property sale to recover...")
+                self.check_bankruptcy(player)
 
     def play_game(self):
         print("Welcome to Monopoly Trail!")
